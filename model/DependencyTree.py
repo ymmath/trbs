@@ -1,6 +1,8 @@
+# Building a dependency tree with the root node as the Internal Variable (investment in pig farms) and terminating at any key output.
 from pathlib import Path
 from core.trbs import TheResponsibleBusinessSimulator
 import numpy as np
+import pandas as pd
 
 class TreeNode:
     def __init__(self, value, category):
@@ -65,6 +67,7 @@ name = 'FinalTemplate'
 
 case = TheResponsibleBusinessSimulator(path, file_format, name)
 case.build()
+
 input_dict = case.input_dict
 
 # Root nodes are all the decision maker options
