@@ -1,0 +1,5 @@
+destination,argument_1,argument_2,operator
+profit,investment in apples,% ROI apples,*
+profit,investment in machinery,% ROI machinery,*
+number of machines,investment in machinery,cost of machines,/
+efficiency,number of machines,efficiency per machine,*
