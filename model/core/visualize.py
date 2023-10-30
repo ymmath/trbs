@@ -4,6 +4,9 @@ This file contains the Visualize class that deals with the creation of all graph
 import re
 import pandas as pd
 import numpy as np
+from random import choice
+from collections import defaultdict
+import networkx as nx
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from core.utils import round_all_dict_values, number_formatter, get_values_from_target, check_list_content
@@ -32,6 +35,7 @@ class Visualize:
         self.available_visuals = {
             "table": self._create_table,
             "barchart": self._create_barchart,
+            "network": self._create_network
         }
         self.available_outputs = [
             "key_outputs",
@@ -234,6 +238,22 @@ class Visualize:
         self._graph_styler(axis, f"Values of {self._str_snake_case_to_text(key)}{name_str}", show_legend)
 
         plt.show()
+
+    def _create_network(self, key: str, subgraph: bool = False, **kwargs) -> None:
+        """
+        This function creates a network graph for a given graph type. Default graph type
+        is the 'dependency-tree' for which we have the sub-graph option to view the dependency tree
+        for only the network associated with the given node.
+        :param subgraph: boolean to display a sub-graph of the network associated with the provided node
+        """
+        # TODO: If subgraph and no node provided, throw error
+        # TODO: Handle nodes that are missing in the `dependencies` sheet
+        # TODO: Questions for Thom-Ivar:
+        #  How to access the input_dict?
+        #  Discuss function signature
+
+
+        pass
 
     def create_visual(self, visual_request: str, key: str, **kwargs):
         """
