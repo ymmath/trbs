@@ -252,8 +252,23 @@ class Visualize:
         #  How to access the input_dict?
         #  Discuss function signature
 
+        if not subgraph:
+            G = nx.DiGraph()
 
-        pass
+            for index, row in data.iterrows():
+                destination = row['destination']
+                argument_1 = row['argument_1']
+                argument_2 = row['argument_2']
+                operator = row['operator']
+
+                # Add nodes for destination, argument_1, and argument_2
+                G.add_node(destination, color=self._determine_category_color_for_network(destination))
+                self._add_edge_to_network(G)
+                pos = self._determine_node_positions(G)
+
+                # Plot
+                ## Make legend
+
 
     def create_visual(self, visual_request: str, key: str, **kwargs):
         """
@@ -272,3 +287,12 @@ class Visualize:
             raise VisualizationError(f"'{key}' is not a valid option")
 
         return self.available_visuals[visual_request](key, **kwargs)
+
+    def _determine_category_color_for_network(self, destination):
+        pass
+
+    def _add_edge_to_network(self, G):
+        pass
+
+    def _determine_node_positions(self, G):
+        pass
