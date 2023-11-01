@@ -27,8 +27,9 @@ class VisualizationError(Exception):
 class Visualize:
     """This class deals with the creation of all graphs and tables"""
 
-    def __init__(self, outcomes, options):
+    def __init__(self, input_dict, outcomes, options):
         # for visualization purposes two digits is sufficient
+        self.input_dict = input_dict
         self.outcomes = round_all_dict_values(outcomes)
         self.options = options
         self.colors = ["#D04A02", "#EB8C00", "#FFB600", "#295477", "#299D8F"]
@@ -40,10 +41,11 @@ class Visualize:
         self.available_outputs = [
             "key_outputs",
             "appreciations",
+            "dependencies",
             "weighted_appreciations",
             "decision_makers_option_appreciation",
         ]
-        self.available_kwargs = ["scenario", "decision_makers_option", "stacked", "show_legend"]
+        self.available_kwargs = ["scenario", "decision_makers_option", "stacked", "show_legend", "node"]
 
     def _validate_kwargs(self, **kwargs) -> None:
         """
@@ -239,7 +241,7 @@ class Visualize:
 
         plt.show()
 
-    def _create_network(self, key: str, subgraph: bool = False, **kwargs) -> None:
+    def _create_network(self, key: str, **kwargs) -> None:
         """
         This function creates a network graph for a given graph type. Default graph type
         is the 'dependency-tree' for which we have the sub-graph option to view the dependency tree
@@ -251,8 +253,10 @@ class Visualize:
         # TODO: Questions for Thom-Ivar:
         #  How to access the input_dict?
         #  Discuss function signature
+        #  Check for other cases in the open source version regarding the numeric nodes
 
-        if not subgraph:
+
+        if "node" not in kwargs:
             G = nx.DiGraph()
 
             for index, row in data.iterrows():

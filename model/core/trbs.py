@@ -69,7 +69,7 @@ class TheResponsibleBusinessSimulator:
         """This function deals with the visualizations of the outcomes"""
         # Set a Visualize class only if this has not yet been initialised.
         if not self.visualizer:
-            self.visualizer = Visualize(self.output_dict, self._get_options())
+            self.visualizer = Visualize(self.input_dict, self.output_dict, self._get_options())
         return self.visualizer.create_visual(visual_request, key, **kwargs)
 
     def transform(self, output_path, requested_format):
