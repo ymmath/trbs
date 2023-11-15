@@ -4,7 +4,7 @@ This file contains the Visualize class that deals with the creation of all graph
 import re
 import pandas as pd
 import numpy as np
-from random import choice
+from random import choices
 from collections import defaultdict
 import networkx as nx
 import matplotlib as mpl
@@ -259,15 +259,43 @@ class Visualize:
         if "node" not in kwargs:
             G = nx.DiGraph()
 
+            # Restructure the data into a pandas DataFrame
+            data = pd.DataFrame({
+                    'argument_1': self.input_dict['argument_1'],
+                    'operator': self.input_dict['operator'],
+                    'argument_2': self.input_dict['argument_2'],
+                    'destination': self.input_dict['destination']
+            })
+
+            data['dep_color'] = self._determine_edge_color_for_network(data)
+
+            # Iterate over the data and add nodes/edge to nx graph
             for index, row in data.iterrows():
                 destination = row['destination']
                 argument_1 = row['argument_1']
                 argument_2 = row['argument_2']
                 operator = row['operator']
+                edge_color = row['dep_color']
 
-                # Add nodes for destination, argument_1, and argument_2
+                # Add nodes for destination
                 G.add_node(destination, color=self._determine_category_color_for_network(destination))
-                self._add_edge_to_network(G)
+
+                ## Add an edge from argument_1 to destination with the operator as the label
+                # TODO: For cases with an integer in the arguements
+                # If squeeze operator specific then one of the arguments is 'null'
+                # Add edges from argument nodes to the destination node with levels
+                if pd.isna(argument_1):
+                    G.add_node(argument_2, color=self._determine_category_color_for_network(destination))
+                    G.add_edge(argument_2, destination, label='squeezed', color=edge_color)
+                elif pd.isna(argument_2):
+                    G.add_node(argument_1, color=self._determine_category_color_for_network(destination))
+                    G.add_edge(argument_1, destination, label='squeezed', color=edge_color)
+                else:
+                    G.add_edge(argument_1, destination, label=self._label_operators(operator, 'arg1'), color=edge_color,
+                               weight=3)
+                    G.add_edge(argument_2, destination, label=self._label_operators(operator, 'arg2'), color=edge_color,
+                               weight=3)
+                # Determine positions of each of the nodes
                 pos = self._determine_node_positions(G)
 
                 # Plot
@@ -295,8 +323,16 @@ class Visualize:
     def _determine_category_color_for_network(self, destination):
         pass
 
-    def _add_edge_to_network(self, G):
-        pass
-
     def _determine_node_positions(self, G):
         pass
+
+    def _determine_edge_color_for_network(self, data):
+        number_of_colors = len(data)
+        return choices(self.colors, k=number_of_colors)
+
+    def _label_operators(self, operator, arg_type):
+        label_map = {
+            '/': {'arg1': '/_arg1', 'arg2': '/_arg2'},
+            '-': {'arg1': '-_arg1', 'arg2': '-_arg2'},
+        }
+        return label_map.get(operator, {}).get(arg_type, operator)
