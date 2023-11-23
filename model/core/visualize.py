@@ -241,6 +241,34 @@ class Visualize:
 
         plt.show()
 
+
+    def _create_legend_for_network(self):
+        legend_dict = {
+            'Fixed input': 'yellow',
+            'Internal input': 'turquoise',
+            'External input': 'orange',
+            'Output': 'green',
+            'Intermediate': 'grey'
+        }
+        handles = []
+        labels = []
+        for category, color in legend_dict.items():
+            handles.append(plt.Line2D([0], [0], color=color, marker='o', markersize=10, linewidth=0))
+            labels.append(f'{category}')
+        return handles, labels
+
+    def _determine_category_for_node(self, node):
+        if node in self.input_dict["key_outputs"]:
+            return "key_output"
+        elif node in self.input_dict["internal_variable_inputs"]:
+            return "internal_input"
+        elif node in self.input_dict["external_variable_inputs"]:
+            return "external_input"
+        elif node in self.input_dict["fixed_inputs"]:
+            return "fixed_input"
+        else:
+            return "intermediate"
+
     def _create_network(self, key: str, **kwargs) -> None:
         """
         This function creates a network graph for a given graph type. Default graph type
@@ -254,52 +282,75 @@ class Visualize:
         #  How to access the input_dict?
         #  Discuss function signature
         #  Check for other cases in the open source version regarding the numeric nodes
+        print("COWABUNGA!")
+        G = nx.DiGraph()
 
+        # Restructure the data into a pandas DataFrame
+        data = pd.DataFrame({
+                'argument_1': self.input_dict['argument_1'],
+                'operator': self.input_dict['operator'],
+                'argument_2': self.input_dict['argument_2'],
+                'destination': self.input_dict['destination']
+        })
 
-        if "node" not in kwargs:
-            G = nx.DiGraph()
+        data['dep_color'] = self._determine_edge_color_for_network(data)
 
-            # Restructure the data into a pandas DataFrame
-            data = pd.DataFrame({
-                    'argument_1': self.input_dict['argument_1'],
-                    'operator': self.input_dict['operator'],
-                    'argument_2': self.input_dict['argument_2'],
-                    'destination': self.input_dict['destination']
-            })
+        # Iterate over the data and add nodes/edge to nx graph
+        for index, row in data.iterrows():
+            destination = row['destination']
+            argument_1 = row['argument_1']
+            argument_2 = row['argument_2']
+            operator = row['operator']
+            edge_color = row['dep_color']
 
-            data['dep_color'] = self._determine_edge_color_for_network(data)
+            # Add nodes for destination
+            G.add_node(destination, color=self._determine_category_color_for_network(destination))
 
-            # Iterate over the data and add nodes/edge to nx graph
-            for index, row in data.iterrows():
-                destination = row['destination']
-                argument_1 = row['argument_1']
-                argument_2 = row['argument_2']
-                operator = row['operator']
-                edge_color = row['dep_color']
+            # TODO: For cases with an integer in the arguments
+            if pd.isna(argument_1):
+                G.add_node(argument_2, color=self._determine_category_color_for_network(argument_2))
+                G.add_edge(argument_2, destination, label='squeezed', color=edge_color)
+            elif pd.isna(argument_2):
+                G.add_node(argument_1, color=self._determine_category_color_for_network(argument_1))
+                G.add_edge(argument_1, destination, label='squeezed', color=edge_color)
+            else:
+                G.add_node(argument_1, color=self._determine_category_color_for_network(argument_1))
+                G.add_node(argument_2, color=self._determine_category_color_for_network(argument_2))
+                G.add_edge(argument_1, destination, label=self._label_operators(operator, 'arg1'),
+                           color=edge_color, weight=3)
+                G.add_edge(argument_2, destination, label=self._label_operators(operator, 'arg2'),
+                           color=edge_color, weight=3)
+            # Determine positions of each of the nodes
+            pos = self._determine_node_positions(G)
 
-                # Add nodes for destination
-                G.add_node(destination, color=self._determine_category_color_for_network(destination))
+        # Plot
+        # Plot the graph
+        edge_labels = {(u, v): d["label"] for u, v, d in G.edges(data=True)}
+        edge_colors = [G[u][v]['color'] for u, v in G.edges()]
+        edge_weights = [G[u][v]['weight'] for u, v in G.edges()]
+        node_colors = [G.nodes[node]["color"] for node in G.nodes()]
 
-                ## Add an edge from argument_1 to destination with the operator as the label
-                # TODO: For cases with an integer in the arguements
-                # If squeeze operator specific then one of the arguments is 'null'
-                # Add edges from argument nodes to the destination node with levels
-                if pd.isna(argument_1):
-                    G.add_node(argument_2, color=self._determine_category_color_for_network(destination))
-                    G.add_edge(argument_2, destination, label='squeezed', color=edge_color)
-                elif pd.isna(argument_2):
-                    G.add_node(argument_1, color=self._determine_category_color_for_network(destination))
-                    G.add_edge(argument_1, destination, label='squeezed', color=edge_color)
-                else:
-                    G.add_edge(argument_1, destination, label=self._label_operators(operator, 'arg1'), color=edge_color,
-                               weight=3)
-                    G.add_edge(argument_2, destination, label=self._label_operators(operator, 'arg2'), color=edge_color,
-                               weight=3)
-                # Determine positions of each of the nodes
-                pos = self._determine_node_positions(G)
+        plt.figure(figsize=(18, 24))
 
-                # Plot
-                ## Make legend
+        # with_labels=False because of rotating the node labels
+        nx.draw(G, pos, node_color=node_colors, edge_color=edge_colors, width=edge_weights, with_labels=False,
+                node_size=2500, font_size=10)
+
+        text = nx.draw_networkx_labels(G, pos, font_weight='bold')
+
+        # Rotate the node labels
+        for _, t in text.items():
+            t.set_rotation(45)
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, label_pos=0.5,
+                                     font_color='red', font_size=18, font_weight='bold')
+
+        # Create and add legend
+        legend_handles, legend_labels = self._create_legend_for_network()
+
+        plt.title("Hierarchical Graph Based on Node Levels")
+        plt.legend(legend_handles, legend_labels, loc='upper right')
+        plt.axis('off')  # Turn off axis for cleaner display
+        plt.show()
 
 
     def create_visual(self, visual_request: str, key: str, **kwargs):
@@ -320,11 +371,37 @@ class Visualize:
 
         return self.available_visuals[visual_request](key, **kwargs)
 
-    def _determine_category_color_for_network(self, destination):
-        pass
+    def _determine_category_color_for_network(self, node):
+        category_is = self._determine_category_for_node(node)
+        if category_is == 'fixed_input':
+            return 'yellow'
+        elif category_is == 'external_input':
+            return 'orange'
+        elif category_is == 'internal_input':
+            return 'turquoise'
+        elif category_is == 'key_output':
+            return 'green'
+        else:
+            # intermediaries and other unaccounted categories
+            return 'grey'
 
     def _determine_node_positions(self, G):
-        pass
+        # Create a dictionary to store nodes at each level
+        nodes_by_level = defaultdict(list)
+        for i, node_list in enumerate(nx.topological_generations(G)):
+            for node in node_list:
+                level = i
+                nodes_by_level[level].append(node)
+
+        x_spacing = 1.0  # Adjust this value for spacing between levels
+        y_spacing = 1.0  # Adjust this value for vertical spacing between nodes at the same level
+        pos = {}
+        for level, nodes in nodes_by_level.items():
+            num_nodes = len(nodes)
+            x_value = level * x_spacing
+            y_values = [(i * (level + 2) - (num_nodes - 1) / 2) * y_spacing for i in range(num_nodes)]
+            pos.update((node, (x_value, y_value)) for node, y_value in zip(nodes, y_values))
+        return pos
 
     def _determine_edge_color_for_network(self, data):
         number_of_colors = len(data)
