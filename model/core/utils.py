@@ -2,7 +2,6 @@
 This module contains general helper functions
 """
 
-
 def round_all_dict_values(my_dict: dict, digits: int = 2) -> dict:
     """
     This function rounds all values in a dictionary to the number of digits specified. Works for nested dictionaries.

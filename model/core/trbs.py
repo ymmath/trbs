@@ -8,7 +8,6 @@ from core.evaluate import Evaluate
 from core.appreciate import Appreciate
 from core.visualize import Visualize
 
-
 class TheResponsibleBusinessSimulator:
     """
     This class is the base class of an tRBS-case and contains all necessary information to import data, evaluate

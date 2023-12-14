@@ -10,6 +10,7 @@ import networkx as nx
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from core.utils import round_all_dict_values, number_formatter, get_values_from_target, check_list_content
+from difflib import get_close_matches
 
 
 class VisualizationError(Exception):
@@ -45,7 +46,14 @@ class Visualize:
             "weighted_appreciations",
             "decision_makers_option_appreciation",
         ]
-        self.available_kwargs = ["scenario", "decision_makers_option", "stacked", "show_legend", "node"]
+        self.available_kwargs = [
+            "scenario",
+            "decision_makers_option",
+            "stacked",
+            "show_legend",
+            "case",
+            "node"
+        ]
 
     def _validate_kwargs(self, **kwargs) -> None:
         """
@@ -96,7 +104,7 @@ class Visualize:
         """
         max_char_length = int(85 / len(title_list))
         truncated_list = [
-            f"{item[:(max_char_length-2)]}.." if len(item) > max_char_length else item for item in title_list
+            f"{item[:(max_char_length - 2)]}.." if len(item) > max_char_length else item for item in title_list
         ]
         return truncated_list
 
@@ -241,7 +249,6 @@ class Visualize:
 
         plt.show()
 
-
     def _create_legend_for_network(self):
         legend_dict = {
             'Fixed input': 'yellow',
@@ -269,7 +276,8 @@ class Visualize:
         else:
             return "intermediate"
 
-    def _create_network(self, key: str, **kwargs) -> None:
+    # Functions below this point are related to network graph
+    def _create_network(self, key: str, **kwargs):
         """
         This function creates a network graph for a given graph type. Default graph type
         is the 'dependency-tree' for which we have the sub-graph option to view the dependency tree
@@ -283,66 +291,158 @@ class Visualize:
         #  Discuss function signature
         #  Check for other cases in the open source version regarding the numeric nodes
         print("COWABUNGA!")
-        G = nx.DiGraph()
 
-        # Restructure the data into a pandas DataFrame
-        data = pd.DataFrame({
+        if 'case' not in kwargs:
+            print('Please specify the name of the case. Otherwise we cannot label graph.')
+        else:
+            case_name = kwargs.get('case')
+
+            # Create the graph structure object
+            G = nx.DiGraph()
+
+            # Restructure the data into a pandas DataFrame
+            data = pd.DataFrame({
                 'argument_1': self.input_dict['argument_1'],
-                'operator': self.input_dict['operator'],
                 'argument_2': self.input_dict['argument_2'],
+                'operator': self.input_dict['operator'],
                 'destination': self.input_dict['destination']
-        })
+            })
 
-        data['dep_color'] = self._determine_edge_color_for_network(data)
+            data['dep_color'] = self._determine_edge_color_for_network(data)
 
-        # Iterate over the data and add nodes/edge to nx graph
+            # Iterate over the data and add nodes/edge to nx graph
+            for index, row in data.iterrows():
+                destination = row['destination']
+                argument_1 = row['argument_1']
+                argument_2 = row['argument_2']
+                operator = row['operator']
+                # row_level = row['hierarchy']
+                edge_color = row['dep_color']
+
+                # Add nodes for destination
+                G.add_node(destination, color=self._determine_category_color_for_network(destination))
+
+                # TODO: For cases with an integer in the arguments
+                if pd.isna(argument_1):
+                    G.add_node(argument_2, color=self._determine_category_color_for_network(argument_2))
+                    G.add_edge(argument_2, destination, label='squeezed', color=edge_color, weight=1)
+                elif pd.isna(argument_2):
+                    G.add_node(argument_1, color=self._determine_category_color_for_network(argument_1))
+                    G.add_edge(argument_1, destination, label='squeezed', color=edge_color, weight=1)
+                else:
+                    G.add_node(argument_1, color=self._determine_category_color_for_network(argument_1))
+                    G.add_node(argument_2, color=self._determine_category_color_for_network(argument_2))
+                    G.add_edge(argument_1, destination, label=self._label_operators(operator, 'arg1'), color=edge_color,
+                               weight=3)
+                    G.add_edge(argument_2, destination, label=self._label_operators(operator, 'arg2'), color=edge_color,
+                               weight=3)
+
+            # Determine positions of each of the nodes
+            pos = self._determine_node_positions(G)
+
+            # Plot the graph
+            edge_labels = {(u, v): d["label"] for u, v, d in G.edges(data=True)}
+            edge_colors = [G[u][v]['color'] for u, v in G.edges()]
+            edge_weights = [G[u][v]['weight'] for u, v in G.edges()]
+            node_colors = [G.nodes[node]["color"] for node in G.nodes()]
+
+            if 'node' in kwargs:
+                self.name_of_node = kwargs.get('node')
+                if self.name_of_node == '':
+                    print('Please enter the name of the node you wish to see!')
+                else:
+                    print(self.name_of_node)
+                    self._select_subset(G, case_name + '_' + self.name_of_node, data, self.name_of_node)
+            else:
+                self._draw_network(G, case_name, pos, edge_labels, edge_colors, edge_weights, node_colors, False)
+                return edge_labels, edge_colors, edge_weights, node_colors
+
+    def _select_subset(self, graph, case, data, name_of_node):
+        # Match to the closest node
+        name_of_node = "".join(get_close_matches(word=name_of_node, possibilities=list(graph), n=1))
+        # TODO: Assert name_of_node is not empty
+        nodes_subset = list(nx.ancestors(graph, name_of_node))
+        nodes_subset.append(name_of_node)
+        nodes_subset += nx.descendants(graph, name_of_node)
+        #     print(nodes_subset)
+        #     print(nx.ancestors(G, name_of_node))
+        #     print(nx.descendants(G, name_of_node))
+        # nx.draw(ancestors, pos, node_color=node_colors, with_labels=False, node_size=1200, font_size=10)
+        self._make_subgraph(case, data, nodes_subset)
+
+    def _make_subgraph(self, case, data, nodes):
+        tuples = []
+
         for index, row in data.iterrows():
             destination = row['destination']
             argument_1 = row['argument_1']
             argument_2 = row['argument_2']
             operator = row['operator']
+            # row_level = row['hierarchy']
             edge_color = row['dep_color']
 
-            # Add nodes for destination
-            G.add_node(destination, color=self._determine_category_color_for_network(destination))
+            if ((argument_1 in nodes) or (argument_2 in nodes)) and (destination in nodes):
+                t = (argument_1, argument_2, destination, operator, edge_color)
+                tuples.append(t)
 
-            # TODO: For cases with an integer in the arguments
-            if pd.isna(argument_1):
-                G.add_node(argument_2, color=self._determine_category_color_for_network(argument_2))
-                G.add_edge(argument_2, destination, label='squeezed', color=edge_color)
-            elif pd.isna(argument_2):
-                G.add_node(argument_1, color=self._determine_category_color_for_network(argument_1))
-                G.add_edge(argument_1, destination, label='squeezed', color=edge_color)
+        # Make the graph and add the nodes
+        G = nx.DiGraph()
+
+        for t in tuples:
+            G.add_node(t[2], color=self._determine_category_color_for_network(t[2]))
+
+            # Add edges from argument nodes to the destination node with levels
+            if pd.isna(t[0]):
+                G.add_node(t[1], color=self._determine_category_color_for_network(t[1]))
+                G.add_edge(t[1], t[2], label='squeezed', color='black', weight=1)
+            elif pd.isna(t[1]):
+                G.add_node(t[0], color=self._determine_category_color_for_network(t[0]))
+                G.add_edge(t[0], t[2], label='squeezed', color='black', weight=1)
             else:
-                G.add_node(argument_1, color=self._determine_category_color_for_network(argument_1))
-                G.add_node(argument_2, color=self._determine_category_color_for_network(argument_2))
-                G.add_edge(argument_1, destination, label=self._label_operators(operator, 'arg1'),
-                           color=edge_color, weight=3)
-                G.add_edge(argument_2, destination, label=self._label_operators(operator, 'arg2'),
-                           color=edge_color, weight=3)
-            # Determine positions of each of the nodes
-            pos = self._determine_node_positions(G)
+                G.add_node(t[0], color=self._determine_category_color_for_network(t[0]))
+                G.add_node(t[1], color=self._determine_category_color_for_network(t[1]))
+                G.add_edge(t[0], t[2], label=self._label_operators(t[3], "arg1"), color=t[4], weight=3)
+                G.add_edge(t[1], t[2], label=self._label_operators(t[3], "arg2"), color=t[4], weight=3)
 
-        # Plot
+        # Determine positions of each of the nodes
+        pos = self._determine_node_positions(G)
+
         # Plot the graph
         edge_labels = {(u, v): d["label"] for u, v, d in G.edges(data=True)}
         edge_colors = [G[u][v]['color'] for u, v in G.edges()]
         edge_weights = [G[u][v]['weight'] for u, v in G.edges()]
         node_colors = [G.nodes[node]["color"] for node in G.nodes()]
 
-        plt.figure(figsize=(18, 24))
+        self._draw_network(G, case, pos, edge_labels, edge_colors, edge_weights, node_colors, True)
+        return edge_labels, edge_colors, edge_weights, node_colors
+
+    def _draw_network(self, graph, case, pos, edge_labels, edge_colors, edge_weights, node_colors, is_subgraph):
+        # This is a function to visualize the plot
+        if is_subgraph:
+            plt.figure(figsize=(18, 24))
+        else:
+            plt.figure(figsize=(45, 60))
 
         # with_labels=False because of rotating the node labels
-        nx.draw(G, pos, node_color=node_colors, edge_color=edge_colors, width=edge_weights, with_labels=False,
-                node_size=2500, font_size=10)
-
-        text = nx.draw_networkx_labels(G, pos, font_weight='bold')
+        nx.draw(graph, pos,
+                node_color=node_colors,
+                edge_color=edge_colors,
+                width=edge_weights,
+                with_labels=False,
+                node_size=2500,
+                font_size=10)
+        text = nx.draw_networkx_labels(graph, pos, font_weight='bold')
 
         # Rotate the node labels
         for _, t in text.items():
             t.set_rotation(45)
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, label_pos=0.5,
-                                     font_color='red', font_size=18, font_weight='bold')
+
+        nx.draw_networkx_edge_labels(graph, pos,
+                                     edge_labels=edge_labels,
+                                     label_pos=0.5,
+                                     font_color='black',
+                                     font_size=18,
+                                     font_weight='bold')
 
         # Create and add legend
         legend_handles, legend_labels = self._create_legend_for_network()
@@ -350,8 +450,8 @@ class Visualize:
         plt.title("Hierarchical Graph Based on Node Levels")
         plt.legend(legend_handles, legend_labels, loc='upper right')
         plt.axis('off')  # Turn off axis for cleaner display
+        plt.savefig('C:/Users/achatterje195/Documents/trbs/model/plots/' + case + '.png')
         plt.show()
-
 
     def create_visual(self, visual_request: str, key: str, **kwargs):
         """
@@ -368,7 +468,6 @@ class Visualize:
             raise VisualizationError(f"'{visual_request}' is not a valid chart type")
         if key not in self.available_outputs:
             raise VisualizationError(f"'{key}' is not a valid option")
-
         return self.available_visuals[visual_request](key, **kwargs)
 
     def _determine_category_color_for_network(self, node):
